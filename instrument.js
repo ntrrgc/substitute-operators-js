@@ -29,7 +29,6 @@ var operatorCount = 1;
 
 files.forEach(function (file) {
   console.log('Processing %s', file);
-  // Let's turn this function declaration into a variable declaration.
   var code = fs.readFileSync(file);
 
   // Parse the code using an interface similar to require("esprima").parse.
