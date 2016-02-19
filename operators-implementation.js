@@ -3,6 +3,15 @@
  */
 
 var operatorsCalledWithArrays = {};
+function printOperatorsCalledWithArrays() {
+  var operatorIds = [];
+  for (var key in operatorsCalledWithArrays) {
+    operatorIds.push(parseInt(key));
+  }
+  console.log(operatorIds.sort(function (a, b) {
+    return a - b;
+  }).join(' '));
+}
 
 function _lt(a,b) {return a < b}
 function _lte(a,b) {return a <= b}
