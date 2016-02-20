@@ -68,6 +68,7 @@ files.forEach(function (file) {
         var opId = node.arguments[0].value;
 
         if (args.operatorIds.indexOf(opId) != -1) {
+          // Rename the function call to lowercase
           node.callee.name = node.callee.name.toLowerCase();
           // Remove the first argument
           node.arguments.shift();
