@@ -2,51 +2,88 @@
  * Created by ntrrgc on 17/01/16.
  */
 
-var needsReplacement = [18, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 32, 33, 34, 35, 37, 38, 39, 41, 44, 45, 46, 47, 49, 50, 51, 52, 53, 54, 56, 93, 96]
-
 var util = require('util');
 var recast = require("recast");
 var fs = require('fs');
 var process = require('process');
+var argparse = require('argparse');
+var glob = require('glob');
+var _ = require('lodash');
 var b = recast.types.builders;
 
-// Let's turn this function declaration into a variable declaration.
-var code = fs.readFileSync(process.argv[2]);
+var parser = new argparse.ArgumentParser({
+  version: '1.0',
+  addHelp: true,
+  description: 'Deinstruments a code replacing comparison functions with operators except for those whose id is' +
+  ' passed as an element of the parameter list. Those just get the id removed but stay as function calls.'
+});
 
-// Parse the code using an interface similar to require("esprima").parse.
-var ast = recast.parse(code);
+parser.addArgument(['glob'], {
+  help: 'A glob matching the files that will be instrumented. You better have a backup of them since they will be' +
+  ' edited in place.'
+});
 
-var operatorCount = 1;
+parser.addArgument(['operatorIds'], {
+  nargs: '+',
+  metavar: 'operator-id',
+  help: 'The operator identifiers of the comparison functions that should be kept, one argument each.'
+});
 
-recast.types.visit(ast, {
-  visitCallExpression: function (path) {
-    var node = path.value;
+var args = parser.parseArgs();
 
-    var operators = {
-      'LT': '<',
-      'GT': '>',
-      'LTE': '<=',
-      'GTE': '>='
-    };
-
-    if (node.callee.type == 'Identifier' && node.callee.name in operators) {
-      var opId = node.arguments[0].value;
-
-      if (needsReplacement.indexOf(opId) != -1) {
-        node.callee.name = node.callee.name.toLowerCase()
-        node.arguments.shift();
-      } else {
-        // Convert in plain operator again;
-        path.replace(b.binaryExpression(
-          operators[node.callee.name],
-          node.arguments[1],
-          node.arguments[2]
-        ));
-      }
-    }
-
-    this.traverse(path);
+args.operatorIds = _.map(args.operatorIds, function (id) {
+  var ret = parseInt(id);
+  if (isNaN(ret)) {
+    console.error("The operator id '%s' is not a number.", id);
+    process.exit(1);
   }
-})
+  return ret;
+});
 
-console.log(recast.print(ast).code);
+var files = glob(args.glob, {
+  sync: true,
+  sorted: true,
+  nodir: true,
+});
+
+files.forEach(function (file) {
+  console.log('Processing %s', file);
+  var code = fs.readFileSync(file);
+
+  // Parse the code using an interface similar to require("esprima").parse.
+  var ast = recast.parse(code);
+
+  recast.types.visit(ast, {
+    visitCallExpression: function (path) {
+      var node = path.value;
+
+      var operators = {
+        'LT': '<',
+        'GT': '>',
+        'LTE': '<=',
+        'GTE': '>='
+      };
+
+      if (node.callee.type == 'Identifier' && node.callee.name in operators) {
+        var opId = node.arguments[0].value;
+
+        if (args.operatorIds.indexOf(opId) != -1) {
+          node.callee.name = node.callee.name.toLowerCase();
+          // Remove the first argument
+          node.arguments.shift();
+        } else {
+          // Convert in plain operator again;
+          path.replace(b.binaryExpression(
+            operators[node.callee.name],
+            node.arguments[1],
+            node.arguments[2]
+          ));
+        }
+      }
+
+      this.traverse(path);
+    }
+  })
+
+  fs.writeFileSync(file, recast.print(ast).code);
+});
